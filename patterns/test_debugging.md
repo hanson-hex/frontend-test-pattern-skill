@@ -2,6 +2,23 @@
 
 ---
 
+## Worktree 与源分支的函数差异
+
+**场景**：在 worktree（基于 `main`）里写测试，但某些函数只存在于开发分支（如 `test/channel`），stash pop 后测试报 `is not a function`。
+
+**原因**：worktree 切出时基于 `main`，stash 里的测试引用了尚未合并到 `main` 的函数。
+
+**解决**：
+- 检查目标函数在当前 worktree 分支是否真实导出：`grep "export function extractXxx" src/pages/Chat/utils.ts`
+- 若不存在，暂时移除该函数的测试，待分支合并后补充
+
+**预防**：创建 worktree 时，从包含目标代码的分支切出，而非从 main：
+```bash
+git worktree add .claude/worktrees/feat-test -b feat/vitest-setup test/channel
+```
+
+---
+
 ## 旧测试用 node:test 与 Vitest 冲突
 
 **症状**：`Cannot bundle built-in module "node:test"`
