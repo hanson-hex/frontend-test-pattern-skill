@@ -2,6 +2,72 @@
 
 ---
 
+## vi.mock factory 中引用外部变量报错
+
+**症状**：`Cannot access 'mockXxx' before initialization`
+
+**原因**：`vi.mock` 被 hoist 到文件顶部执行，此时 `const mockXxx = vi.fn()` 还未初始化。
+
+**解决**：用 `vi.hoisted()` 声明需要在 factory 中用到的变量：
+
+```typescript
+// ✅ 正确：vi.hoisted 保证变量在 hoist 之前就初始化
+const { mockFetch, mockSave } = vi.hoisted(() => ({
+  mockFetch: vi.fn(),
+  mockSave: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/api/modules/data', () => ({
+  dataApi: { fetch: mockFetch, save: mockSave },
+}))
+```
+
+```typescript
+// ❌ 错误：const 在 vi.mock hoist 后才初始化
+const mockFetch = vi.fn()
+vi.mock('@/api/modules/data', () => ({
+  dataApi: { fetch: mockFetch },  // ReferenceError
+}))
+```
+
+---
+
+## fake timers 与 findBy* / waitFor 超时
+
+**症状**：使用 `vi.useFakeTimers()` 后，`await screen.findByText(...)` 超时 5000ms。
+
+**原因**：`findBy*` 内部用 `waitFor` 轮询，`waitFor` 的间隔依赖真实 `setTimeout`，fake timers 接管后这些定时器不会自动推进。
+
+**解决**：把基础渲染测试（需要 `findBy*`）和定时器相关测试（需要 `vi.useFakeTimers`）拆成两个 `describe` 块：
+
+```typescript
+// 基础渲染测试 — 不用 fake timers，findBy* 正常工作
+describe('Component - 渲染', () => {
+  it('显示数据', async () => {
+    mockApi.mockResolvedValue(data)
+    render(<Component />)
+    expect(await screen.findByText('内容')).toBeInTheDocument()
+  })
+})
+
+// 定时器行为测试 — 用 fake timers，手动推进
+describe('Component - 轮询', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('轮询去重', async () => {
+    render(<Component />)
+    await act(async () => {
+      vi.advanceTimersByTime(2500)
+      await Promise.resolve()
+    })
+    // 断言...
+  })
+})
+```
+
+---
+
 ## ESM-only 包（无 main 字段）解析失败
 
 **症状**：`Failed to resolve entry for package "@xxx/yyy". The package may have incorrect main/module/exports specified in its package.json.`

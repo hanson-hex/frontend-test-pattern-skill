@@ -198,6 +198,27 @@ describe('ChatActionGroup', () => {
 
 ---
 
+## Icon 库的 Proxy Mock（零配置）
+
+当项目使用大量图标组件（如 `@ant-design/icons`、`lucide-react`、`@agentscope-ai/icons`），逐一 mock 很繁琐。用 `Proxy` 动态生成：
+
+```typescript
+// src/test/setup.ts 或测试文件顶部
+vi.mock('@ant-design/icons', () =>
+  new Proxy(
+    {},
+    {
+      get: (_, iconName: string) =>
+        () => <span data-testid={`icon-${iconName}`} aria-label={iconName.toLowerCase().replace('outlined', '')} />,
+    },
+  ),
+)
+```
+
+这样任何 `<SunOutlined />` 都会渲染为 `<span data-testid="icon-SunOutlined" aria-label="sun" />`，无需手动列举每个图标。
+
+---
+
 ## 常见问题
 
 **antd 组件渲染问题**
