@@ -6,6 +6,44 @@
 
 ---
 
+## 测试 fetch 封装层（request.ts）
+
+对 `request` / `fetch` 封装层本身进行单元测试时，mock `fetch` 全局函数：
+
+```typescript
+// 构造 mock Response
+function mockFetch(status: number, body?: unknown, contentType = 'application/json') {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: 'OK',
+    headers: { get: () => contentType },
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
+  } as unknown as Response)
+}
+
+// 检查请求 Headers
+it('POST 自动加 Content-Type', async () => {
+  mockFetch(200, {})
+  await request('/api', { method: 'POST', body: '{}' })
+  const headers: Headers = (fetch as any).mock.calls[0][1].headers
+  expect(headers.get('Content-Type')).toBe('application/json')
+})
+```
+
+同时 mock 依赖的 `config` 和 `authHeaders` 模块，让 URL 和 token 可控：
+
+```typescript
+vi.mock('../config', () => ({
+  getApiUrl: (path: string) => `/api${path}`,
+  getApiToken: vi.fn(() => ''),
+  clearAuthToken: vi.fn(),
+}))
+```
+
+---
+
 ## 方案一：vi.mock（推荐首选）
 
 ### 基础用法

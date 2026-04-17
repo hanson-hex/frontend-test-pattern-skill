@@ -182,6 +182,20 @@ describe('buildModelError', () => {
 
 ---
 
+## Vite 全局变量（define）的测试处理
+
+Vite 的 `define` 配置注入的全局常量（如 `VITE_API_BASE_URL`、`TOKEN`）在测试中需要通过 `globalThis` 设置：
+
+```typescript
+// vite.config.ts 中有 define: { VITE_API_BASE_URL: ... }
+// 测试中这样设置：
+const setViteBase = (v: string) => { (globalThis as any).VITE_API_BASE_URL = v }
+
+beforeEach(() => setViteBase(''))  // 每个测试前重置
+```
+
+---
+
 ## 依赖外部模块的函数
 
 当工具函数导入了 API 模块（如 `chatApi.filePreviewUrl`），需要 mock：
