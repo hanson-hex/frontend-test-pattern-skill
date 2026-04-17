@@ -2,6 +2,28 @@
 
 ---
 
+## 旧测试用 node:test 与 Vitest 冲突
+
+**症状**：`Cannot bundle built-in module "node:test"`
+
+**场景**：项目中存量测试用了 `import { describe, it } from "node:test"`，在 Vitest 环境下报错。
+
+**解决**：在 `vite.config.ts` 的 test 配置中 exclude 掉这些文件，等后续迁移：
+
+```typescript
+test: {
+  exclude: [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/testConnectionMessage.test.ts",  // 旧 node:test 格式，待迁移
+  ],
+}
+```
+
+迁移时只需将 `import { describe, it } from "node:test"` 改为 Vitest 的 globals（配置 `globals: true` 后无需 import）。
+
+---
+
 ## 路径别名不识别
 
 **症状**：`Cannot find module '@/api/...'`
