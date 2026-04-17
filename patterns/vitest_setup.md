@@ -127,6 +127,27 @@ vi.mock('*.less', () => ({}))
 
 ---
 
+## ESM-only 第三方包（无 main 字段）
+
+某些包（如 `@agentscope-ai/*`）只有 `module` 字段，Vitest 的 Node 解析器无法处理。
+在 `test` 块加 `alias` + `deps.inline`：
+
+```typescript
+test: {
+  deps: {
+    inline: [/@agentscope-ai\//],
+  },
+  alias: {
+    "@agentscope-ai/chat": path.resolve(
+      __dirname,
+      "node_modules/@agentscope-ai/chat/lib/index.js",
+    ),
+  },
+}
+```
+
+---
+
 ## 目录约定
 
 ```

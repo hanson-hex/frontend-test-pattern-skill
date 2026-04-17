@@ -2,6 +2,49 @@
 
 ---
 
+## ESM-only 包（无 main 字段）解析失败
+
+**症状**：`Failed to resolve entry for package "@xxx/yyy". The package may have incorrect main/module/exports specified in its package.json.`
+
+**原因**：包只有 `module` 字段没有 `main`，Vitest 的 Node 解析器找不到入口。
+
+**解决**：在 `vite.config.ts` 的 `test` 块中用 `alias` 直接指向文件，配合 `deps.inline` 让 Vite 管道处理：
+
+```typescript
+// vite.config.ts
+test: {
+  deps: {
+    inline: [/@agentscope-ai\//],  // 让 Vite 而非 Node 解析这些包
+  },
+  alias: {
+    "@agentscope-ai/chat": path.resolve(
+      __dirname,
+      "node_modules/@agentscope-ai/chat/lib/index.js",
+    ),
+  },
+}
+```
+
+查找入口文件：`cat node_modules/@pkg/name/package.json | grep -E '"main"|"module"'`
+
+---
+
+## vi.mock 路径相对测试文件，不是组件
+
+**症状**：mock 写了但组件仍然渲染真实版本（DOM 中没有 `data-testid`，但有真实内容）。
+
+**原因**：`vi.mock('./SomeComponent')` 的路径是相对于**测试文件**，不是被测组件文件。
+
+**示例**：
+```
+components/ChatActionGroup/index.tsx         → import '../ChatSessionDrawer'
+components/ChatActionGroup/__tests__/X.test.tsx  → vi.mock 需要 '../../ChatSessionDrawer'
+```
+
+**排查方法**：从测试文件的目录手动推算相对路径到目标模块。
+
+---
+
 ## ResizeObserver mock 必须用构造函数
 
 **症状**：`TypeError: () => ({...}) is not a constructor`，出现在 antd 组件（含 rc-resize-observer）测试时。
