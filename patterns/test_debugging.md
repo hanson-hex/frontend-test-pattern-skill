@@ -2,6 +2,49 @@
 
 ---
 
+## ResizeObserver mock 必须用构造函数
+
+**症状**：`TypeError: () => ({...}) is not a constructor`，出现在 antd 组件（含 rc-resize-observer）测试时。
+
+**原因**：antd 内部用 `new ResizeObserver(cb)` 调用，箭头函数不能作构造函数。
+
+**解决**：`setup.ts` 中用 `function` 关键字：
+
+```typescript
+// ❌ 箭头函数不能被 new 调用
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(),
+}))
+
+// ✅ 普通函数可以被 new 调用
+global.ResizeObserver = vi.fn().mockImplementation(function () {
+  return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }
+})
+```
+
+---
+
+## dropdown 场景下 getByText 找到多个元素
+
+**症状**：`Found multiple elements with the text: GPT-4`
+
+**原因**：antd Dropdown 打开后，trigger 按钮和 dropdown panel 里各有一处相同文字。
+
+**解决**：用 `getAllByText` + 索引，或缩小范围用 `within`：
+
+```typescript
+// 方案 A：用 getAllByText
+const items = screen.getAllByText('GPT-4')
+await user.click(items[items.length - 1])  // 点 dropdown 里的那个
+
+// 方案 B：用 within 限定范围
+import { within } from '@testing-library/react'
+const panel = screen.getByRole('menu')
+await user.click(within(panel).getByText('GPT-4'))
+```
+
+---
+
 ## Worktree 与源分支的函数差异
 
 **场景**：在 worktree（基于 `main`）里写测试，但某些函数只存在于开发分支（如 `test/channel`），stash pop 后测试报 `is not a function`。
