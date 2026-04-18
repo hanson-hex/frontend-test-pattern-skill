@@ -53,10 +53,11 @@ version: 0.1.0
 | 文件特征 | 模式文件 |
 |---------|---------|
 | 纯函数/工具函数（无 JSX） | `patterns/pure_function_test.md` |
-| React 函数组件 | `patterns/component_test.md` |
+| React 函数组件（< 200 行） | `patterns/component_test.md` |
 | 自定义 Hook（use*） | `patterns/hook_test.md` |
 | Zustand store | `patterns/store_test.md` |
 | 含 API 调用 | `patterns/api_mock.md` |
+| **800+ 行重型页面，依赖第三方 UI 运行时** | **`patterns/page_test.md`** |
 | 完整用户流程（可选） | `patterns/e2e_playwright.md` |
 
 ### Step 4: 生成测试代码
@@ -109,6 +110,7 @@ expect(screen.getByText('expected')).toBeInTheDocument()
 | `patterns/hook_test.md` | 自定义 Hook 测试 |
 | `patterns/api_mock.md` | API/fetch mock |
 | `patterns/store_test.md` | Zustand store 测试 |
+| `patterns/page_test.md` | 复杂页面测试（openclaw factory 模式，800+ 行依赖外部运行时） |
 | `patterns/e2e_playwright.md` | Playwright E2E（可选） |
 | `patterns/test_debugging.md` | 调试与常见问题 |
 
