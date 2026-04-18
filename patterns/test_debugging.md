@@ -1,17 +1,17 @@
-# 测试调试与常见问题
+# Debugging and Common Issues
 
 ---
 
-## vi.mock factory 中引用外部变量报错
+## Variables in vi.mock factory cause ReferenceError
 
-**症状**：`Cannot access 'mockXxx' before initialization`
+**Symptom**: `Cannot access 'mockXxx' before initialization`
 
-**原因**：`vi.mock` 被 hoist 到文件顶部执行，此时 `const mockXxx = vi.fn()` 还未初始化。
+**Cause**: `vi.mock` is hoisted to the top of the file, but `const mockXxx = vi.fn()` is not yet initialized at that point.
 
-**解决**：用 `vi.hoisted()` 声明需要在 factory 中用到的变量：
+**Fix**: Declare variables with `vi.hoisted()`:
 
 ```typescript
-// ✅ 正确：vi.hoisted 保证变量在 hoist 之前就初始化
+// ✅ correct: vi.hoisted ensures variables are initialized before hoisting
 const { mockFetch, mockSave } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
   mockSave: vi.fn().mockResolvedValue(undefined),
@@ -23,7 +23,7 @@ vi.mock('@/api/modules/data', () => ({
 ```
 
 ```typescript
-// ❌ 错误：const 在 vi.mock hoist 后才初始化
+// ❌ wrong: const is initialized after vi.mock hoisting
 const mockFetch = vi.fn()
 vi.mock('@/api/modules/data', () => ({
   dataApi: { fetch: mockFetch },  // ReferenceError
@@ -32,100 +32,100 @@ vi.mock('@/api/modules/data', () => ({
 
 ---
 
-## fake timers 与 findBy* / waitFor 超时
+## fake timers cause findBy* / waitFor to time out
 
-**症状**：使用 `vi.useFakeTimers()` 后，`await screen.findByText(...)` 超时 5000ms。
+**Symptom**: `vi.useFakeTimers()` causes `await screen.findByText(...)` to time out at 5000ms.
 
-**原因**：`findBy*` 内部用 `waitFor` 轮询，`waitFor` 的间隔依赖真实 `setTimeout`，fake timers 接管后这些定时器不会自动推进。
+**Cause**: `findBy*` uses `waitFor` internally, which relies on real `setTimeout` for polling. Fake timers take over those timers and they never advance automatically.
 
-**解决**：把基础渲染测试（需要 `findBy*`）和定时器相关测试（需要 `vi.useFakeTimers`）拆成两个 `describe` 块：
+**Fix**: Split basic render tests and timer-dependent tests into separate `describe` blocks:
 
 ```typescript
-// 基础渲染测试 — 不用 fake timers，findBy* 正常工作
-describe('Component - 渲染', () => {
-  it('显示数据', async () => {
+// Basic render tests — no fake timers, findBy* works normally
+describe('Component - rendering', () => {
+  it('displays data', async () => {
     mockApi.mockResolvedValue(data)
     render(<Component />)
-    expect(await screen.findByText('内容')).toBeInTheDocument()
+    expect(await screen.findByText('content')).toBeInTheDocument()
   })
 })
 
-// 定时器行为测试 — 用 fake timers，手动推进
-describe('Component - 轮询', () => {
+// Timer behavior tests — fake timers, advance manually
+describe('Component - polling', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('轮询去重', async () => {
+  it('deduplicates polling', async () => {
     render(<Component />)
     await act(async () => {
       vi.advanceTimersByTime(2500)
       await Promise.resolve()
     })
-    // 断言...
+    // assertions...
   })
 })
 ```
 
 ---
 
-## ESM-only 包（无 main 字段）解析失败
+## ESM-only package (no main field) fails to resolve
 
-**症状**：`Failed to resolve entry for package "@xxx/yyy". The package may have incorrect main/module/exports specified in its package.json.`
+**Symptom**: `Failed to resolve entry for package "@xxx/yyy". The package may have incorrect main/module/exports specified in its package.json.`
 
-**原因**：包只有 `module` 字段没有 `main`，Vitest 的 Node 解析器找不到入口。
+**Cause**: Package only has a `module` field with no `main`. Vitest's Node resolver cannot find the entry point.
 
-**解决**：在 `vite.config.ts` 的 `test` 块中用 `alias` 直接指向文件，配合 `deps.inline` 让 Vite 管道处理：
+**Fix**: Add `alias` pointing directly to the file, combined with `deps.inline`:
 
 ```typescript
 // vite.config.ts
 test: {
   deps: {
-    inline: [/@agentscope-ai\//],  // 让 Vite 而非 Node 解析这些包
+    inline: [/^@your-org\//],  // let Vite (not Node) resolve these packages
   },
   alias: {
-    "@agentscope-ai/chat": path.resolve(
+    "@your-org/pkg": path.resolve(
       __dirname,
-      "node_modules/@agentscope-ai/chat/lib/index.js",
+      "node_modules/@your-org/pkg/lib/index.js",
     ),
   },
 }
 ```
 
-查找入口文件：`cat node_modules/@pkg/name/package.json | grep -E '"main"|"module"'`
+Find the entry file: `cat node_modules/@pkg/name/package.json | grep -E '"main"|"module"'`
 
 ---
 
-## vi.mock 路径相对测试文件，不是组件
+## vi.mock path is relative to the test file, not the component
 
-**症状**：mock 写了但组件仍然渲染真实版本（DOM 中没有 `data-testid`，但有真实内容）。
+**Symptom**: Mock is set up but component still renders the real version (no `data-testid` in DOM, but real content is there).
 
-**原因**：`vi.mock('./SomeComponent')` 的路径是相对于**测试文件**，不是被测组件文件。
+**Cause**: `vi.mock('./SomeComponent')` is resolved relative to the **test file**, not the component being tested.
 
-**示例**：
+**Example**:
 ```
-components/ChatActionGroup/index.tsx         → import '../ChatSessionDrawer'
-components/ChatActionGroup/__tests__/X.test.tsx  → vi.mock 需要 '../../ChatSessionDrawer'
+components/Button/index.tsx           → imports '../Modal'
+components/Button/__tests__/X.test.tsx → vi.mock needs '../../Modal'
 ```
 
-**排查方法**：从测试文件的目录手动推算相对路径到目标模块。
+**Debug**: Manually trace the relative path from the test file's directory to the target module.
 
 ---
 
-## ResizeObserver mock 必须用构造函数
+## ResizeObserver mock must use a constructor function
 
-**症状**：`TypeError: () => ({...}) is not a constructor`，出现在 antd 组件（含 rc-resize-observer）测试时。
+**Symptom**: `TypeError: () => ({...}) is not a constructor` when testing components that use virtual lists or resize-aware layouts.
 
-**原因**：antd 内部用 `new ResizeObserver(cb)` 调用，箭头函数不能作构造函数。
+**Cause**: The library calls `new ResizeObserver(cb)` internally. Arrow functions cannot be used as constructors.
 
-**解决**：`setup.ts` 中用 `function` 关键字：
+**Fix**: Use a regular function in `setup.ts`:
 
 ```typescript
-// ❌ 箭头函数不能被 new 调用
+// ❌ arrow function cannot be called with new
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(),
 }))
 
-// ✅ 普通函数可以被 new 调用
+// ✅ regular function can be called with new
 global.ResizeObserver = vi.fn().mockImplementation(function () {
   return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }
 })
@@ -133,73 +133,72 @@ global.ResizeObserver = vi.fn().mockImplementation(function () {
 
 ---
 
-## dropdown 场景下 getByText 找到多个元素
+## antd Modal CSS animation leaves content in DOM
 
-**症状**：`Found multiple elements with the text: GPT-4`
+**Symptom**: After clicking a button that closes a Modal, `queryByText` still finds the button text even with `waitFor` timeout of 3000ms.
 
-**原因**：antd Dropdown 打开后，trigger 按钮和 dropdown panel 里各有一处相同文字。
+**Cause**: antd Modal keeps content in the DOM during the CSS exit animation. jsdom never completes animations, so content never disappears.
 
-**解决**：用 `getAllByText` + 索引，或缩小范围用 `within`：
+**Fix**: Mock Modal to conditionally render:
 
 ```typescript
-// 方案 A：用 getAllByText
-const items = screen.getAllByText('GPT-4')
-await user.click(items[items.length - 1])  // 点 dropdown 里的那个
-
-// 方案 B：用 within 限定范围
-import { within } from '@testing-library/react'
-const panel = screen.getByRole('menu')
-await user.click(within(panel).getByText('GPT-4'))
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return {
+    ...actual,
+    Modal: ({ open, children }: any) =>
+      open ? <div data-testid="modal">{children}</div> : null,
+  }
+})
 ```
 
 ---
 
-## Worktree 与源分支的函数差异
+## vi.mock path mismatch (alias vs relative)
 
-**场景**：在 worktree（基于 `main`）里写测试，但某些函数只存在于开发分支（如 `test/channel`），stash pop 后测试报 `is not a function`。
+**Symptom**: Mock is set up but the real implementation is still called.
 
-**原因**：worktree 切出时基于 `main`，stash 里的测试引用了尚未合并到 `main` 的函数。
+**Cause**: The mock path doesn't match how the module is imported in the source file.
 
-**解决**：
-- 检查目标函数在当前 worktree 分支是否真实导出：`grep "export function extractXxx" src/pages/Chat/utils.ts`
-- 若不存在，暂时移除该函数的测试，待分支合并后补充
+```typescript
+// source file uses relative path
+import { myApi } from '../../api/modules/data'
 
-**预防**：创建 worktree 时，从包含目标代码的分支切出，而非从 main：
-```bash
-git worktree add .claude/worktrees/feat-test -b feat/vitest-setup test/channel
+// mock must use the same path
+vi.mock('@/api/modules/data', ...)   // ← may not match
+// change to:
+vi.mock('../../api/modules/data', ...)
 ```
 
 ---
 
-## 旧测试用 node:test 与 Vitest 冲突
+## node:test conflicts with Vitest
 
-**症状**：`Cannot bundle built-in module "node:test"`
+**Symptom**: `Cannot bundle built-in module "node:test"`
 
-**场景**：项目中存量测试用了 `import { describe, it } from "node:test"`，在 Vitest 环境下报错。
+**Scenario**: Existing tests use `import { describe, it } from "node:test"`.
 
-**解决**：在 `vite.config.ts` 的 test 配置中 exclude 掉这些文件，等后续迁移：
+**Fix**: Exclude those files in `vite.config.ts` until migrated:
 
 ```typescript
 test: {
   exclude: [
     "**/node_modules/**",
     "**/dist/**",
-    "**/testConnectionMessage.test.ts",  // 旧 node:test 格式，待迁移
+    "**/legacyTest.test.ts",  // old node:test format, pending migration
   ],
 }
 ```
 
-迁移时只需将 `import { describe, it } from "node:test"` 改为 Vitest 的 globals（配置 `globals: true` 后无需 import）。
+To migrate: remove `import { describe, it } from "node:test"` — with `globals: true` these are available automatically.
 
 ---
 
-## 路径别名不识别
+## Path alias not recognized
 
-**症状**：`Cannot find module '@/api/...'`
+**Symptom**: `Cannot find module '@/api/...'`
 
-**原因**：vitest.config.ts 没有继承 vite.config.ts 的 alias。
-
-**解决**：
+**Fix**:
 
 ```typescript
 // vite.config.ts
@@ -210,7 +209,7 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, './src') },
   },
   test: {
-    // Vitest 通常自动继承，如不生效，显式添加：
+    // Vitest usually inherits this; add explicitly if needed:
     alias: { '@': path.resolve(__dirname, './src') },
   },
 })
@@ -218,222 +217,60 @@ export default defineConfig({
 
 ---
 
-## Less / CSS Module 报错
+## Async test timeout
 
-**症状**：`Failed to transform ... SyntaxError: Unexpected token`
+**Symptom**: `Error: Timeout - Async function did not complete within 5000ms`
 
-**解决 A**：在 vite.config.ts 中配置 `css: true`（默认已开启，若关闭了需打开）。
-
-**解决 B**：在 setup.ts 中全局 mock：
+**Fix A**: Increase timeout:
 
 ```typescript
-// src/test/setup.ts
-vi.mock('*.module.less', () => ({}))
-vi.mock('*.less', () => ({}))
-```
-
-**解决 C**：使用 `identity-obj-proxy`（Jest 社区方案，Vitest 也可用）：
-
-```bash
-npm i -D identity-obj-proxy
-```
-
-```typescript
-// vite.config.ts
-test: {
-  css: false,
-  moduleNameMapper: {
-    '\\.less$': 'identity-obj-proxy',
-  },
-}
-```
-
----
-
-## window / document 未定义
-
-**症状**：`ReferenceError: window is not defined`
-
-**原因**：environment 未设置为 jsdom。
-
-**解决**：
-
-```typescript
-// vite.config.ts
-test: {
-  environment: 'jsdom',
-}
-```
-
-或在测试文件顶部添加注释（单文件生效）：
-
-```typescript
-// @vitest-environment jsdom
-```
-
----
-
-## matchMedia 报错
-
-**症状**：`TypeError: window.matchMedia is not a function`（antd 常见）
-
-**解决**：在 setup.ts 中 mock：
-
-```typescript
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
-```
-
----
-
-## ResizeObserver 未定义
-
-**症状**：`ReferenceError: ResizeObserver is not defined`（antd 虚拟列表常见）
-
-**解决**：
-
-```typescript
-// src/test/setup.ts
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
-```
-
----
-
-## 异步测试超时
-
-**症状**：`Error: Timeout - Async function did not complete within 5000ms`
-
-**解决 A**：增加超时时间：
-
-```typescript
-it('慢速操作', async () => {
+it('slow operation', async () => {
   // ...
-}, 10_000)  // 10 秒超时
+}, 10_000)
 ```
 
-**解决 B**：确认使用了正确的异步查询方式：
+**Fix B**: Use async query methods:
 
 ```typescript
-// ❌ 可能超时：getBy* 是同步的，元素不存在立即报错
-screen.getByText('加载中')
+// ❌ may throw immediately: getBy* is synchronous
+screen.getByText('Loading...')
 
-// ✅ 正确：findBy* 会轮询等待
-await screen.findByText('加载完成')
+// ✅ correct: findBy* polls until element appears
+await screen.findByText('Done')
 
-// ✅ 或用 waitFor
+// ✅ or use waitFor
 await waitFor(() => {
-  expect(screen.getByText('加载完成')).toBeInTheDocument()
+  expect(screen.getByText('Done')).toBeInTheDocument()
 })
 ```
 
 ---
 
-## act 警告
+## Debugging Tips
 
-**症状**：`Warning: An update to X inside a test was not wrapped in act(...)`
-
-**解决**：将触发状态更新的操作包裹在 `act`：
+**Print DOM structure**:
 
 ```typescript
-import { act } from '@testing-library/react'
-
-act(() => {
-  store.setState({ value: 'new' })
-})
-// 或异步版本
-await act(async () => {
-  await someAsyncAction()
-})
-```
-
-> `userEvent` 的操作已内置 `act`，无需手动包裹。
-
----
-
-## vi.mock 不生效
-
-**症状**：mock 了模块，但测试中仍调用真实实现。
-
-**可能原因 1**：mock factory 中用了外部变量（hoist 问题）：
-
-```typescript
-// ❌ 错误
-const mockFn = vi.fn()
-vi.mock('@/api', () => ({ api: { call: mockFn } }))  // mockFn 在 hoist 前未定义
-
-// ✅ 正确：factory 内直接用 vi.fn()
-vi.mock('@/api', () => ({ api: { call: vi.fn() } }))
-```
-
-**可能原因 2**：模块路径不完全一致（相对路径 vs 别名）：
-
-```typescript
-// 源码中用了相对路径
-import { chatApi } from '../../api/modules/chat'
-
-// mock 要用相同路径或别名
-vi.mock('@/api/modules/chat', ...)  // ← 可能不匹配
-// 改为：
-vi.mock('../../api/modules/chat', ...)
-```
-
----
-
-## 外部库副作用报错
-
-**症状**：导入 `@agentscope-ai/chat` 等外部库时报错。
-
-**解决**：在 setup.ts 或测试文件顶部 mock 整个包：
-
-```typescript
-vi.mock('@agentscope-ai/chat', () => ({
-  AgentScopeRuntimeWebUI: vi.fn(() => null),
-  useChatAnywhere: vi.fn(() => ({ createSession: vi.fn() })),
-}))
-```
-
----
-
-## 调试技巧
-
-**打印 DOM 结构**：
-
-```typescript
+screen.debug()
+// or
 import { prettyDOM } from '@testing-library/react'
 console.log(prettyDOM(document.body))
-// 或
-screen.debug()
 ```
 
-**查看所有可用查询**：
+**See all available queries**:
 
 ```typescript
-screen.logTestingPlaygroundURL()  // 输出 Testing Playground 链接
+screen.logTestingPlaygroundURL()
 ```
 
-**单独运行一个测试**：
+**Run a single test file**:
 
 ```bash
-npx vitest run src/pages/Chat/__tests__/utils.test.ts
+npx vitest run src/components/MyComponent/__tests__/MyComponent.test.tsx
 ```
 
-**监听特定文件**：
+**Watch a specific directory**:
 
 ```bash
-npx vitest src/pages/Chat
+npx vitest src/components/MyComponent
 ```

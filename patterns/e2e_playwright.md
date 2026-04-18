@@ -1,15 +1,14 @@
-# Playwright E2E 测试（可选）
+# Playwright E2E Tests (optional)
 
-E2E 测试覆盖真实用户流程，需要完整的前后端服务。
-**仅在以下情况使用**：核心用户流程无法通过组件测试覆盖，或需要验证跨页面交互。
+E2E tests cover real user flows and require a running frontend + backend. Use only when core flows cannot be covered by component tests.
 
 ---
 
-## 安装
+## Install
 
 ```bash
 npm i -D @playwright/test
-npx playwright install  # 安装浏览器
+npx playwright install
 ```
 
 ---
@@ -30,7 +29,6 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-  // 启动 dev server
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
@@ -41,90 +39,71 @@ export default defineConfig({
 
 ---
 
-## 目录结构
+## Directory Structure
 
 ```
 e2e/
-├── chat.spec.ts          # Chat 页面流程
-├── login.spec.ts         # 登录流程
+├── auth.spec.ts
+├── dashboard.spec.ts
 └── fixtures/
-    └── auth.ts           # 登录 fixture
+    └── auth.ts
 ```
 
 ---
 
-## 基础结构
+## Basic Structure
 
 ```typescript
-// e2e/chat.spec.ts
 import { test, expect } from '@playwright/test'
 
-test.describe('Chat 页面', () => {
+test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    // 若需要登录，先完成登录
     await page.goto('/login')
-    await page.fill('[name=username]', 'test@example.com')
+    await page.fill('[name=username]', 'user@example.com')
     await page.fill('[name=password]', 'password')
     await page.click('button[type=submit]')
-    await page.waitForURL('/chat')
+    await page.waitForURL('/dashboard')
   })
 
-  test('发送消息并收到回复', async ({ page }) => {
-    await page.goto('/chat')
-
-    // 输入消息
-    const input = page.getByRole('textbox', { name: /输入消息/i })
-    await input.fill('你好')
-    await input.press('Enter')
-
-    // 等待回复出现
-    await expect(page.locator('.message-assistant').last()).toBeVisible({
-      timeout: 15_000,
-    })
+  test('displays welcome message after login', async ({ page }) => {
+    await expect(page.getByText('Welcome')).toBeVisible()
   })
 
-  test('新建对话清空历史', async ({ page }) => {
-    await page.goto('/chat')
-    await page.getByRole('button', { name: /新建/i }).click()
-
-    // 验证消息列表为空
-    await expect(page.locator('.message-list')).toBeEmpty()
+  test('navigates to settings', async ({ page }) => {
+    await page.getByRole('link', { name: 'Settings' }).click()
+    await expect(page).toHaveURL('/settings')
   })
 })
 ```
 
 ---
 
-## mock API（推荐用于 CI）
+## Mock API with route (recommended for CI)
 
-不依赖真实后端，用 Playwright 的 `route` mock 接口：
+Avoid real backend by intercepting requests:
 
 ```typescript
-test('mock 后端响应测试 UI 流程', async ({ page }) => {
-  // mock 流式响应
-  await page.route('/api/chat/stream', async (route) => {
+test('handles API error gracefully', async ({ page }) => {
+  await page.route('/api/data', async (route) => {
     await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body: ' {"content": "Mock 回复"}\n\n [DONE]\n\n',
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Server Error' }),
     })
   })
 
-  await page.goto('/chat')
-  await page.getByRole('textbox').fill('测试消息')
-  await page.keyboard.press('Enter')
-
-  await expect(page.getByText('Mock 回复')).toBeVisible()
+  await page.goto('/dashboard')
+  await expect(page.getByText(/error loading/i)).toBeVisible()
 })
 ```
 
 ---
 
-## 登录 Fixture（复用）
+## Auth Fixture (reusable login)
 
 ```typescript
 // e2e/fixtures/auth.ts
-import { test as base, expect } from '@playwright/test'
+import { test as base } from '@playwright/test'
 
 export const test = base.extend({
   authedPage: async ({ page }, use) => {
@@ -132,15 +111,15 @@ export const test = base.extend({
     await page.fill('[name=username]', process.env.TEST_USER!)
     await page.fill('[name=password]', process.env.TEST_PASS!)
     await page.click('button[type=submit]')
-    await page.waitForURL('/chat')
+    await page.waitForURL('/dashboard')
     await use(page)
   },
 })
 
-// 使用时
+// usage
 import { test } from './fixtures/auth'
-test('需要登录的测试', async ({ authedPage }) => {
-  // authedPage 已经完成登录
+test('authenticated flow', async ({ authedPage }) => {
+  // authedPage is already logged in
 })
 ```
 
@@ -160,9 +139,9 @@ test('需要登录的测试', async ({ authedPage }) => {
 
 ---
 
-## 何时不用 E2E
+## When NOT to use E2E
 
-- **纯 UI 逻辑**：用组件测试（更快、更稳定）
-- **API 数据处理**：用 api_mock.md 的 vi.mock
-- **表单验证**：用组件测试
-- **只有 E2E 才能覆盖的**：跨页面跳转、真实 SSE 流式响应、文件上传完整流程
+- **Pure UI logic**: use component tests (faster, more stable)
+- **API data processing**: use `vi.mock` in unit tests
+- **Form validation**: use component tests
+- **Reserve E2E for**: cross-page navigation, real streaming responses, full file upload flows

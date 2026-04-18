@@ -1,8 +1,8 @@
 /**
- * 通用测试渲染封装
- * 为组件测试提供 Router、Theme、i18n 等 Provider 包裹
+ * Shared test render utilities
+ * Wraps components with Router, Theme, i18n and other providers for testing.
  *
- * 使用方式：
+ * Usage:
  *   import { renderWithProviders } from '@/test/common_setup'
  *   renderWithProviders(<MyComponent />)
  */
@@ -12,7 +12,7 @@ import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom'
 import { type ReactNode } from 'react'
 
 // -----------------------------------------------------------------------
-// Provider 封装
+// Provider wrapper
 // -----------------------------------------------------------------------
 
 interface ProvidersProps {
@@ -21,19 +21,19 @@ interface ProvidersProps {
 }
 
 /**
- * 包含所有必要 Provider 的 wrapper。
- * 按需添加项目特定的 Provider（ThemeProvider、ConfigProvider 等）。
+ * Wrapper with all required providers.
+ * Add project-specific providers here (ThemeProvider, i18n, etc.).
  */
 function AllProviders({ children, routerProps }: ProvidersProps) {
   return (
     <MemoryRouter {...routerProps}>
       {/*
-       * 若项目有 ThemeProvider，在此添加：
+       * Add ThemeProvider if needed:
        * <ThemeProvider theme="light">
        *   {children}
        * </ThemeProvider>
        *
-       * 若项目有 i18n Provider，在此添加：
+       * Add i18n Provider if needed:
        * <I18nextProvider i18n={i18nInstance}>
        *   {children}
        * </I18nextProvider>
@@ -48,13 +48,13 @@ function AllProviders({ children, routerProps }: ProvidersProps) {
 // -----------------------------------------------------------------------
 
 interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
-  /** MemoryRouter 初始路由，默认 '/' */
+  /** Initial routes for MemoryRouter, defaults to ['/'] */
   initialEntries?: string[]
 }
 
 /**
- * 带完整 Provider 的 render 封装。
- * 替代裸 render()，适用于所有组件测试。
+ * Render with all providers.
+ * Use instead of bare render() for all component tests.
  */
 export function renderWithProviders(
   ui: React.ReactElement,
@@ -72,15 +72,15 @@ export function renderWithProviders(
 }
 
 // -----------------------------------------------------------------------
-// createMockStore（Zustand）
+// createMockStore (Zustand)
 // -----------------------------------------------------------------------
 
 /**
- * 创建隔离的 Zustand store 实例（避免测试间状态污染）。
+ * Create an isolated Zustand store instance to prevent state leaking between tests.
  *
- * 使用方式（需要 store 导出 createXxxStore 工厂函数）：
- *   const store = createMockStore(createAgentStore, { agents: [] })
- *   store.setState({ currentAgent: mockAgent })
+ * Usage (requires store to export a factory function):
+ *   const store = createMockStore(createMyStore, { items: [] })
+ *   store.setState({ selectedItem: mockItem })
  */
 export function createMockStore<T extends object>(
   createFn: () => { getState: () => T; setState: (partial: Partial<T>) => void },

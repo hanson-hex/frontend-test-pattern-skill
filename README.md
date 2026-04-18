@@ -1,32 +1,27 @@
 # frontend-test-pattern
 
-React + Vite 前端测试技能，与 [python-test-pattern](../python-test-pattern) 同系列。
+A skill for generating high-quality tests in React + Vite projects using Vitest + @testing-library/react.
 
-## 覆盖范围
+## Coverage
 
-| 测试类型 | 框架 | 模式文件 |
-|---------|------|---------|
-| 纯函数/工具函数 | Vitest | `patterns/pure_function_test.md` |
-| React 组件 | Vitest + @testing-library/react | `patterns/component_test.md` |
-| 自定义 Hook | Vitest + renderHook | `patterns/hook_test.md` |
-| Zustand Store | Vitest | `patterns/store_test.md` |
-| API Mock | vi.mock / msw | `patterns/api_mock.md` |
-| E2E（可选） | Playwright | `patterns/e2e_playwright.md` |
+| Test type | Framework | Pattern file |
+|---|---|---|
+| Pure functions / utilities | Vitest | `patterns/pure_function_test.md` |
+| React components | Vitest + @testing-library/react | `patterns/component_test.md` |
+| Custom hooks | Vitest + renderHook | `patterns/hook_test.md` |
+| Zustand stores | Vitest | `patterns/store_test.md` |
+| API mocking | vi.mock / msw | `patterns/api_mock.md` |
+| Heavy page components | Factory + Capture pattern | `patterns/page_test.md` |
+| E2E (optional) | Playwright | `patterns/e2e_playwright.md` |
 
-## 安装
+## Install
 
 ```bash
 bash install.sh
 ```
 
-## 使用
+## Usage
 
-在 Claude Code 中，当需要为 React 项目生成测试时，skill 会自动激活。
+In Claude Code, this skill activates automatically when you need to write tests for a React/Vite project.
 
-也可以直接说：「帮我为 Chat/utils.ts 生成测试」
-
-## 试点项目
-
-CoPaw 前端（`/Users/hex/work/CoPaw/console`）Chat 页面
-
-首批测试参考：`examples/chat_utils_example.md`
+You can also say: "Write tests for utils.ts" or "Set up Vitest for this project".

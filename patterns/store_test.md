@@ -1,123 +1,112 @@
-# Zustand Store 测试模式
+# Zustand Store Testing
 
-直接测试 store 的状态变更逻辑，不需要渲染组件。
+Test store state transitions directly without rendering any component.
 
 ---
 
-## 基础结构
+## Basic Structure
 
 ```typescript
 import { describe, it, expect, beforeEach } from 'vitest'
 import { act } from '@testing-library/react'
+import { useMyStore } from '@/stores/myStore'
 
-// 直接导入 store hook
-import { useAgentStore } from '@/stores/agentStore'
-
-describe('agentStore', () => {
+describe('myStore', () => {
   beforeEach(() => {
-    // 每个测试前重置 store 状态
-    useAgentStore.setState(useAgentStore.getInitialState?.() ?? {})
+    useMyStore.setState({ selectedItem: null, items: [] })
   })
 
-  it('初始状态正确', () => {
-    const state = useAgentStore.getState()
-    expect(state.currentAgent).toBeNull()
+  it('has correct initial state', () => {
+    expect(useMyStore.getState().selectedItem).toBeNull()
   })
 
-  it('setCurrentAgent 更新当前 agent', () => {
+  it('setSelectedItem updates selectedItem', () => {
     act(() => {
-      useAgentStore.getState().setCurrentAgent({ id: '1', name: 'TestAgent' })
+      useMyStore.getState().setSelectedItem({ id: '1', name: 'Test' })
     })
-    expect(useAgentStore.getState().currentAgent?.id).toBe('1')
+    expect(useMyStore.getState().selectedItem?.id).toBe('1')
   })
 })
 ```
 
 ---
 
-## 隔离测试（推荐）
+## Isolated Tests (recommended)
 
-为避免测试间状态污染，建议使用工厂函数创建独立 store 实例：
-
-```typescript
-// 若 store 支持 create 导出（非单例）
-import { createAgentStore } from '@/stores/agentStore'
-
-describe('agentStore（隔离）', () => {
-  let store: ReturnType<typeof createAgentStore>
-
-  beforeEach(() => {
-    store = createAgentStore()
-  })
-
-  it('初始 agents 为空数组', () => {
-    expect(store.getState().agents).toEqual([])
-  })
-})
-```
-
-若 store 是单例（`export const useXxxStore = create(...)`），用 `setState` 重置：
+Use `setState` to reset to initial values before each test to prevent state leaking between tests:
 
 ```typescript
 beforeEach(() => {
-  // 重置为初始状态
-  useAgentStore.setState({
-    currentAgent: null,
-    agents: [],
+  useMyStore.setState({
+    selectedItem: null,
+    items: [],
+  })
+})
+```
+
+If the store exports a factory function (non-singleton):
+
+```typescript
+import { createMyStore } from '@/stores/myStore'
+
+describe('myStore (isolated)', () => {
+  let store: ReturnType<typeof createMyStore>
+
+  beforeEach(() => {
+    store = createMyStore()
+  })
+
+  it('initial items is empty array', () => {
+    expect(store.getState().items).toEqual([])
   })
 })
 ```
 
 ---
 
-## 在组件中测试 store 集成
+## Store + Component Integration
 
 ```typescript
 import { renderWithProviders } from '@/test/common_setup'
-import { useAgentStore } from '@/stores/agentStore'
+import { useMyStore } from '@/stores/myStore'
 
-it('组件渲染 store 中的 agent 名称', () => {
-  // 预设 store 状态
-  useAgentStore.setState({
-    currentAgent: { id: '1', name: 'My Agent' },
-  })
+it('component renders item name from store', () => {
+  useMyStore.setState({ selectedItem: { id: '1', name: 'My Item' } })
 
-  renderWithProviders(<AgentHeader />)
-  expect(screen.getByText('My Agent')).toBeInTheDocument()
+  renderWithProviders(<ItemHeader />)
+  expect(screen.getByText('My Item')).toBeInTheDocument()
 })
 ```
 
 ---
 
-## 异步 action 测试
+## Async Actions
 
 ```typescript
-it('fetchAgents 加载数据到 store', async () => {
-  vi.mock('@/api/modules/agent', () => ({
-    agentApi: {
-      list: vi.fn().mockResolvedValue([
-        { id: '1', name: 'Agent A' },
-      ]),
+it('fetchItems loads data into the store', async () => {
+  vi.mock('@/api/modules/items', () => ({
+    itemsApi: {
+      list: vi.fn().mockResolvedValue([{ id: '1', name: 'Item A' }]),
     },
   }))
 
   await act(async () => {
-    await useAgentStore.getState().fetchAgents()
+    await useMyStore.getState().fetchItems()
   })
 
-  expect(useAgentStore.getState().agents).toHaveLength(1)
-  expect(useAgentStore.getState().agents[0].name).toBe('Agent A')
+  expect(useMyStore.getState().items).toHaveLength(1)
+  expect(useMyStore.getState().items[0].name).toBe('Item A')
 })
 ```
 
 ---
 
-## 测试覆盖清单
+## Coverage Checklist
 
-| 测试类型 | 说明 |
-|---------|------|
-| 初始状态 | 验证 store 初始值正确 |
-| 同步 action | 调用后状态立即变化 |
-| 异步 action | loading/data/error 三态 |
-| 状态重置 | reset/clear action |
-| 派生状态（selector） | computed 值计算正确 |
+| Test type | Description |
+|---|---|
+| Initial state | Verify store initial values |
+| Sync actions | State changes immediately after call |
+| Async actions | loading / data / error three states |
+| Reset / clear | reset or clear actions |
+| Derived state (selectors) | Computed values are correct |

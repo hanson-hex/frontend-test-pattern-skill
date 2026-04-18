@@ -1,12 +1,12 @@
-# React 组件测试模式
+# React Component Testing
 
-使用 `@testing-library/react` 测试组件的渲染输出与用户交互。
+Test component render output and user interactions using `@testing-library/react`.
 
-核心原则：**测试用户能看到的，而不是实现细节。**
+Core principle: **test what the user sees, not implementation details.**
 
 ---
 
-## 基础结构
+## Basic Structure
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest'
@@ -16,17 +16,17 @@ import { renderWithProviders } from '@/test/common_setup'
 import { MyComponent } from '../MyComponent'
 
 describe('MyComponent', () => {
-  it('渲染默认状态', () => {
+  it('renders default state', () => {
     renderWithProviders(<MyComponent />)
-    expect(screen.getByRole('button', { name: '提交' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument()
   })
 
-  it('点击按钮触发回调', async () => {
+  it('triggers callback on button click', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
 
     renderWithProviders(<MyComponent onSubmit={onSubmit} />)
-    await user.click(screen.getByRole('button', { name: '提交' }))
+    await user.click(screen.getByRole('button', { name: 'Submit' }))
 
     expect(onSubmit).toHaveBeenCalledOnce()
   })
@@ -37,7 +37,7 @@ describe('MyComponent', () => {
 
 ## renderWithProviders
 
-组件通常依赖 Router、Theme、i18n。用封装好的 `renderWithProviders` 代替裸 `render`：
+Components typically depend on Router, Theme, or i18n. Use `renderWithProviders` instead of bare `render`:
 
 ```typescript
 // src/test/common_setup.tsx
@@ -48,7 +48,7 @@ import { ReactNode } from 'react'
 function AllProviders({ children }: { children: ReactNode }) {
   return (
     <MemoryRouter>
-      {/* 若有 ThemeProvider/i18n Provider，在此包裹 */}
+      {/* add ThemeProvider / i18n Provider here as needed */}
       {children}
     </MemoryRouter>
   )
@@ -64,146 +64,90 @@ export function renderWithProviders(
 
 ---
 
-## screen 查询优先级
+## Query Priority
 
-按可访问性从高到低选择查询方式：
+Choose queries from highest to lowest accessibility priority:
 
 ```
-1. getByRole('button', { name: '...' })     ← 最优先，语义化
-2. getByLabelText('用户名')                  ← 表单控件
-3. getByPlaceholderText('请输入...')         ← 次选
-4. getByText('确认删除')                     ← 文本内容
-5. getByTestId('submit-btn')               ← 最后手段，需在组件加 data-testid
+1. getByRole('button', { name: '...' })   ← best, semantic
+2. getByLabelText('Username')              ← form controls
+3. getByPlaceholderText('Enter...')        ← fallback
+4. getByText('Confirm Delete')             ← text content
+5. getByTestId('submit-btn')              ← last resort, add data-testid to component
 ```
 
 ---
 
 ## userEvent vs fireEvent
 
-优先用 `userEvent`，它模拟真实用户行为（触发 focus、blur、键盘事件等）：
+Prefer `userEvent` — it simulates real user behavior (triggers focus, blur, keyboard events):
 
 ```typescript
 const user = userEvent.setup()
 
-// 点击
 await user.click(screen.getByRole('button'))
-
-// 输入文字
 await user.type(screen.getByRole('textbox'), 'hello')
-
-// 清空再输入
 await user.clear(screen.getByRole('textbox'))
-await user.type(screen.getByRole('textbox'), 'new value')
-
-// 键盘快捷键
 await user.keyboard('{Enter}')
 await user.keyboard('{ArrowDown}')
 ```
 
-`fireEvent` 只用于不支持 userEvent 的场景（如自定义合成事件）：
+Use `fireEvent` only for cases `userEvent` cannot handle (e.g. custom synthetic events):
 
 ```typescript
 import { fireEvent } from '@testing-library/react'
 fireEvent.change(input, { target: { value: 'test' } })
+
+// CSS hidden elements (pointer-events: none) require fireEvent
+fireEvent.click(screen.getByTestId('hidden-btn').closest('button')!)
 ```
 
 ---
 
-## 异步组件测试
+## Async Components
 
-含异步操作的组件（数据加载、请求）需等待状态变化：
+Components with data loading need to wait for state changes:
 
 ```typescript
-import { waitFor, screen } from '@testing-library/react'
-import { vi } from 'vitest'
-
-// mock API
-vi.mock('@/api/modules/provider', () => ({
-  providerApi: {
-    listProviders: vi.fn().mockResolvedValue([
-      { id: '1', name: 'OpenAI' },
-    ]),
+vi.mock('@/api/modules/data', () => ({
+  dataApi: {
+    list: vi.fn().mockResolvedValue([{ id: '1', name: 'Item A' }]),
   },
 }))
 
-it('加载完成后显示 provider 列表', async () => {
-  renderWithProviders(<ModelSelector />)
-
-  // 等待异步内容出现
-  expect(await screen.findByText('OpenAI')).toBeInTheDocument()
+it('shows list after loading', async () => {
+  renderWithProviders(<DataList />)
+  expect(await screen.findByText('Item A')).toBeInTheDocument()
 })
 
-it('加载中显示 loading 状态', async () => {
-  // 让请求挂起
-  vi.mocked(providerApi.listProviders).mockImplementation(
-    () => new Promise(() => {}),
-  )
-
-  renderWithProviders(<ModelSelector />)
+it('shows loading state', () => {
+  vi.mocked(dataApi.list).mockImplementation(() => new Promise(() => {}))
+  renderWithProviders(<DataList />)
   expect(screen.getByRole('progressbar')).toBeInTheDocument()
 })
 ```
 
 ---
 
-## 实战示例：ChatActionGroup
+## Coverage Checklist
 
-```typescript
-// ChatActionGroup/index.test.tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { renderWithProviders } from '@/test/common_setup'
-import { ChatActionGroup } from '../ChatActionGroup'
-
-// mock 外部 hook
-vi.mock('@agentscope-ai/chat', () => ({
-  useChatAnywhere: vi.fn(() => ({
-    createSession: vi.fn(),
-  })),
-}))
-
-describe('ChatActionGroup', () => {
-  const user = userEvent.setup()
-
-  it('渲染新建对话按钮', () => {
-    renderWithProviders(<ChatActionGroup />)
-    expect(screen.getByRole('button', { name: /新建/i })).toBeInTheDocument()
-  })
-
-  it('点击搜索按钮触发搜索回调', async () => {
-    const onSearch = vi.fn()
-    renderWithProviders(<ChatActionGroup onSearch={onSearch} />)
-
-    await user.click(screen.getByRole('button', { name: /搜索/i }))
-    expect(onSearch).toHaveBeenCalledOnce()
-  })
-})
-```
+| Test type | Example |
+|---|---|
+| Default render | Key elements are present |
+| Props variations | Different props produce different output |
+| User interactions | Click, type, keyboard |
+| Async states | loading → data → error |
+| Conditional render | Show/hide based on state |
+| Callback invocation | onXxx called with correct args |
 
 ---
 
-## 测试覆盖清单
+## Icon Library Proxy Mock (zero-config)
 
-为每个组件覆盖：
-
-| 测试类型 | 示例 |
-|---------|------|
-| 默认渲染 | 关键元素是否存在 |
-| props 变化 | 不同 props 渲染不同内容 |
-| 用户交互 | 点击、输入、键盘 |
-| 异步状态 | loading → 数据 → 错误 |
-| 条件渲染 | 根据状态显示/隐藏 |
-| 回调调用 | onXxx 是否被调用，参数是否正确 |
-
----
-
-## Icon 库的 Proxy Mock（零配置）
-
-当项目使用大量图标组件（如 `@ant-design/icons`、`lucide-react`、`@agentscope-ai/icons`），逐一 mock 很繁琐。用 `Proxy` 动态生成：
+When a project uses many icon components, mocking them one by one is tedious. Use `Proxy` to generate mocks dynamically:
 
 ```typescript
-// src/test/setup.ts 或测试文件顶部
+// src/test/setup.ts or top of test file
 vi.mock('@ant-design/icons', () =>
   new Proxy(
     {},
@@ -215,35 +159,36 @@ vi.mock('@ant-design/icons', () =>
 )
 ```
 
-这样任何 `<SunOutlined />` 都会渲染为 `<span data-testid="icon-SunOutlined" aria-label="sun" />`，无需手动列举每个图标。
+Any `<SunOutlined />` renders as `<span data-testid="icon-SunOutlined" aria-label="sun" />` without listing each icon explicitly.
 
 ---
 
-## 常见问题
+## antd Modal CSS Animation Issue
 
-**antd 组件渲染问题**
-
-antd 部分组件（Modal、Tooltip）使用 Portal，渲染在 body 上。用 `screen.getByText` 仍可找到，无需特殊处理。
-
-**测试 Select/Dropdown**
-
-antd Select 比较特殊：
+antd Modal keeps content in DOM during CSS exit animation. jsdom never completes the animation, so `queryByText` still finds the button. Fix by mocking Modal to conditionally render:
 
 ```typescript
-// 打开下拉
-await user.click(screen.getByRole('combobox'))
-// 选择选项
-await user.click(await screen.findByText('选项一'))
-expect(screen.getByRole('combobox')).toHaveTextContent('选项一')
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return {
+    ...actual,
+    Modal: ({ open, children }: any) =>
+      open ? <div data-testid="modal">{children}</div> : null,
+  }
+})
 ```
 
-**snapshot 测试**
+## antd Dropdown: Multiple Elements Found
 
-谨慎使用 snapshot，容易产生噪音。仅用于静态展示组件：
+When a Dropdown is open, the trigger button and dropdown panel both contain the same text:
 
 ```typescript
-it('匹配快照', () => {
-  const { container } = renderWithProviders(<Badge count={5} />)
-  expect(container).toMatchSnapshot()
-})
+// Option A: use getAllByText + index
+const items = screen.getAllByText('GPT-4')
+await user.click(items[items.length - 1])  // click item inside dropdown
+
+// Option B: narrow scope with within
+import { within } from '@testing-library/react'
+const panel = screen.getByRole('menu')
+await user.click(within(panel).getByText('GPT-4'))
 ```
